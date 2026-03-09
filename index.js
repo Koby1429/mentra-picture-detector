@@ -4,8 +4,8 @@ const axios = require('axios');
 
 const app = express();
 const server = new AppServer({
-  packageName: 'com.yakov.picture_detector', // Match your Mentra package name
-  apiKey: 'YOUR_MENTRA_API_KEY', // From Mentra console
+  packageName: 'com.yakov.picture.detector', // Match your Mentra package name
+  apiKey: process.env.MENTRA_API_KEY, // Loaded from env
   port: process.env.PORT || 3000 // For Railway dynamic port
 });
 
@@ -25,8 +25,8 @@ server.onSession = async (session, sessionId, userId) => {
     // Send to Face++ for analysis
     const response = await axios.post('https://api-us.faceplusplus.com/facepp/v3/detect', null, {
       params: {
-        api_key: 'YOUR_FACEPP_API_KEY',
-        api_secret: 'YOUR_FACEPP_API_SECRET',
+        api_key: process.env.FACEPP_API_KEY,
+        api_secret: process.env.FACEPP_API_SECRET,
         image_base64: base64Image,
         return_attributes: 'age,gender,emotion,beauty'
       }
