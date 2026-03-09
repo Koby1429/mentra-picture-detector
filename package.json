@@ -6,7 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@mentra/sdk": "^latest",
+    "@mentra/sdk": "^2.1.29",
     "express": "^4.18.2",
     "axios": "^1.6.0"
   }
