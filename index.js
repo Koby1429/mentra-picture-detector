@@ -1,0 +1,60 @@
+const { AppServer, AppSession } = require('@mentra/sdk');
+const express = require('express');
+const axios = require('axios');
+
+const app = express();
+const server = new AppServer({
+  packageName: 'com.yakov.picture_detector', // Match your Mentra package name
+  apiKey: 'YOUR_MENTRA_API_KEY', // From Mentra console
+  port: process.env.PORT || 3000 // For Railway dynamic port
+});
+
+// Handle new sessions (app activation)
+server.onSession = async (session, sessionId, userId) => {
+  console.log(`Session started: ${sessionId}`);
+
+  try {
+    // Capture photo from glasses
+    const photo = await session.camera.requestPhoto({
+      metadata: { reason: 'facial_recognition' }
+    });
+
+    const imageBytes = Buffer.from(photo.photoData);
+    const base64Image = imageBytes.toString('base64');
+
+    // Send to Face++ for analysis
+    const response = await axios.post('https://api-us.faceplusplus.com/facepp/v3/detect', null, {
+      params: {
+        api_key: 'YOUR_FACEPP_API_KEY',
+        api_secret: 'YOUR_FACEPP_API_SECRET',
+        image_base64: base64Image,
+        return_attributes: 'age,gender,emotion,beauty'
+      }
+    });
+
+    // Process results
+    const faces = response.data.faces || [];
+    let resultText = 'Detected faces: ';
+    if (faces.length === 0) {
+      resultText += 'None';
+    } else {
+      faces.forEach((face, index) => {
+        const attrs = face.attributes;
+        const age = attrs.age?.value || 'Unknown';
+        const gender = attrs.gender?.value || 'Unknown';
+        const emotion = Object.keys(attrs.emotion).reduce((a, b) => attrs.emotion[a] > attrs.emotion[b] ? a : b, 'neutrality');
+        resultText += `\nFace ${index + 1}: Age ${age}, Gender: ${gender}, Emotion: ${emotion}`;
+      });
+    }
+
+    // Send results to glasses HUD/phone
+    await session.display.sendText(resultText);
+
+  } catch (error) {
+    console.error('Error:', error);
+    await session.display.sendText('Error analyzing photo.');
+  }
+};
+
+// Start the server
+server.start().then(() => console.log(`Server running on port ${process.env.PORT || 3000}`));
