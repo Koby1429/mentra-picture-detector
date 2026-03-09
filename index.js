@@ -4,7 +4,7 @@ const axios = require('axios');
 
 const app = express();
 const server = new AppServer({
-  packageName: 'com.yakov.picture.detector', // Match your Mentra package name
+  packageName: 'com.yakov.picture.detector', // Updated Mentra package name
   apiKey: process.env.MENTRA_API_KEY, // Loaded from env
   port: process.env.PORT || 3000 // For Railway dynamic port
 });
@@ -42,19 +42,4 @@ server.onSession = async (session, sessionId, userId) => {
         const attrs = face.attributes;
         const age = attrs.age?.value || 'Unknown';
         const gender = attrs.gender?.value || 'Unknown';
-        const emotion = Object.keys(attrs.emotion).reduce((a, b) => attrs.emotion[a] > attrs.emotion[b] ? a : b, 'neutrality');
-        resultText += `\nFace ${index + 1}: Age ${age}, Gender: ${gender}, Emotion: ${emotion}`;
-      });
-    }
-
-    // Send results to glasses HUD/phone
-    await session.display.sendText(resultText);
-
-  } catch (error) {
-    console.error('Error:', error);
-    await session.display.sendText('Error analyzing photo.');
-  }
-};
-
-// Start the server
-server.start().then(() => console.log(`Server running on port ${process.env.PORT || 3000}`));
+        const emotion = Object.keys(attrs.emotion
