@@ -42,4 +42,19 @@ server.onSession = async (session, sessionId, userId) => {
         const attrs = face.attributes;
         const age = attrs.age?.value || 'Unknown';
         const gender = attrs.gender?.value || 'Unknown';
-        const emotion = Object.keys(attrs.emotion
+        const emotion = Object.keys(attrs.emotion).reduce((a, b) => attrs.emotion[a] > attrs.emotion[b] ? a : b, 'neutrality');
+        resultText += `\nFace ${index + 1}: Age ${age}, Gender: ${gender}, Emotion: ${emotion}`;
+      });
+    }
+
+    // Send results to glasses HUD/phone
+    await session.display.sendText(resultText);
+
+  } catch (error) {
+    console.error('Error:', error);
+    await session.display.sendText('Error analyzing photo.');
+  }
+};
+
+// Start the server
+server.start().then(() => console.log(`Server running on port ${process.env.PORT || 3000}`));
