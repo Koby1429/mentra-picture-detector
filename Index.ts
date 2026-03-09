@@ -266,7 +266,7 @@ class FaceAnalyzerApp extends AppServer {
 const port = Number(process.env.PORT) || 8080;
 
 const server = new FaceAnalyzerApp({
-  packageName: 'com.yakov.faceanalyzer',
+  packageName: 'com.yakov.picture.detector',  // ← updated
   apiKey: process.env.MENTRA_API_KEY!,
   port,
   host: '0.0.0.0',
