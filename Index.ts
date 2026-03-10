@@ -1,6 +1,7 @@
 import { AppServer, AppSession } from '@mentra/sdk';
 import * as dotenv from 'dotenv';
 import express from 'express';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -215,9 +216,20 @@ class FaceAnalyzerApp extends AppServer {
     };
 
     // Step 1: Upload image
-    console.log('[FACECHECK] Uploading image...');
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
-    const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
+    console.log('[FACECHECK] Enhancing image...');
+    const rawBuffer = Buffer.from(imageBase64, 'base64');
+
+    // Upscale to at least 640px wide, sharpen, and boost contrast for better face detection
+    const enhancedBuffer = await sharp(rawBuffer)
+      .resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: false })
+      .sharpen({ sigma: 1.5 })
+      .normalise()
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    console.log('[FACECHECK] Enhanced image size:', enhancedBuffer.length, 'bytes');
+
+    const blob = new Blob([enhancedBuffer], { type: 'image/jpeg' });
     const formData = new FormData();
     formData.append('images', blob, 'photo.jpg');
     formData.append('id_search', '');
@@ -309,4 +321,4 @@ const server = new FaceAnalyzerApp({
 
 server.start()
   .then(() => console.log(`✅ Face Search running on port ${port}`))
-  .catch(err => { console.error('❌ Failed to start:', err); process.exit(1); });
+  .catch(err => { console.error('❌ Failed to start:', err); process.exit(1); });ב
