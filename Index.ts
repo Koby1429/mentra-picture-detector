@@ -14,14 +14,14 @@ class FaceAnalyzerApp extends AppServer {
     const app = this.getExpressApp();
     app.use(express.json());
 
-    app.get('/health', (_req, res) => res.status(200).send('OK - Face Analyzer running!'));
+    app.get('/health', (_req, res) => res.status(200).send('OK - Face Search running!'));
 
     // ─── Webview ─────────────────────────────────────────────────────────────
     app.get('/webview', (_req, res) => {
       res.status(200).send(`<!DOCTYPE html>
 <html>
 <head>
-  <title>Face Analyzer</title>
+  <title>Face Search</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,24 +29,31 @@ class FaceAnalyzerApp extends AppServer {
     h1 { color: #4CAF50; font-size: 24px; margin-bottom: 6px; }
     #connStatus { font-size: 13px; margin: 6px 0 10px; }
     #feedback { min-height: 18px; font-size: 13px; color: #aaa; margin: 8px 0; }
+    #progressBar { width: 100%; max-width: 320px; margin: 6px auto; display: none; background: #333; border-radius: 6px; overflow: hidden; height: 10px; }
+    #progressFill { height: 100%; background: #4CAF50; width: 0%; transition: width 0.3s; }
     #btnScan { width: 100%; max-width: 320px; padding: 18px; margin: 10px auto; display: block;
       background: #4CAF50; color: white; border: none; border-radius: 10px;
       cursor: pointer; font-size: 18px; font-weight: bold; }
     #btnScan:disabled { background: #555; cursor: not-allowed; }
     .results { max-width: 360px; margin: 14px auto; text-align: left; }
-    .face-card { background: #16213e; border-radius: 10px; padding: 14px; margin: 10px 0; }
-    .face-title { color: #4CAF50; font-weight: bold; font-size: 15px; margin-bottom: 8px; }
-    .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2a2a4a; font-size: 14px; }
+    .result-card { background: #16213e; border-radius: 10px; padding: 14px; margin: 10px 0; overflow: hidden; }
+    .result-title { color: #4CAF50; font-weight: bold; font-size: 15px; margin-bottom: 8px; }
+    .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2a2a4a; font-size: 13px; }
     .row:last-child { border-bottom: none; }
-    .lbl { color: #aaa; }
-    .val { color: #eee; font-weight: bold; }
+    .lbl { color: #aaa; min-width: 50px; }
+    .val { color: #eee; font-weight: bold; text-align: right; word-break: break-all; }
+    .val a { color: #4CAF50; text-decoration: none; }
+    .score-bar { height: 6px; border-radius: 3px; background: #4CAF50; margin: 4px 0 8px; }
+    .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; float: right; margin-left: 10px; }
+    .no-results { color: #aaa; font-size: 14px; padding: 20px; }
   </style>
 </head>
 <body>
-  <h1>😊 Face Analyzer</h1>
+  <h1>🔍 Face Search</h1>
   <p id="connStatus">Checking...</p>
-  <p id="feedback">Press Scan to analyze</p>
-  <button id="btnScan" onclick="doScan()">📷 Scan Face</button>
+  <p id="feedback">Press Scan to search the web by face</p>
+  <div id="progressBar"><div id="progressFill"></div></div>
+  <button id="btnScan" onclick="doScan()">📷 Scan &amp; Search</button>
   <div class="results" id="results"></div>
   <script>
     async function checkConn() {
@@ -61,43 +68,59 @@ class FaceAnalyzerApp extends AppServer {
     async function doScan() {
       const btn = document.getElementById('btnScan');
       const fb = document.getElementById('feedback');
+      const bar = document.getElementById('progressBar');
+      const fill = document.getElementById('progressFill');
       btn.disabled = true;
       btn.textContent = '⏳ Scanning...';
       fb.textContent = 'Capturing photo...';
+      bar.style.display = 'block';
+      fill.style.width = '5%';
       document.getElementById('results').innerHTML = '';
 
       try {
-        const d = await fetch('/action/scan', { method: 'POST' }).then(r => r.json());
+        fb.textContent = 'Searching the web by face... (may take ~30s)';
+        fill.style.width = '20%';
+
+        const resp = await fetch('/action/scan', { method: 'POST' });
+        const d = await resp.json();
+
+        fill.style.width = '100%';
+        setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 600);
+
         if (d.error) {
           fb.textContent = 'Error: ' + d.error;
-        } else if (!d.faces || d.faces.length === 0) {
-          fb.textContent = 'No faces detected';
+        } else if (!d.results || d.results.length === 0) {
+          fb.textContent = 'No matches found';
+          document.getElementById('results').innerHTML = '<p class="no-results">No matching faces found on the web.</p>';
         } else {
-          fb.textContent = d.faces.length + ' face' + (d.faces.length > 1 ? 's' : '') + ' detected';
-          renderFaces(d.faces);
+          fb.textContent = d.results.length + ' match' + (d.results.length > 1 ? 'es' : '') + ' found';
+          renderResults(d.results);
         }
       } catch(e) {
         fb.textContent = 'Request failed — try again';
+        bar.style.display = 'none';
       }
 
       btn.disabled = false;
-      btn.textContent = '📷 Scan Face';
+      btn.textContent = '📷 Scan & Search';
     }
 
-    function renderFaces(faces) {
+    function renderResults(results) {
       const c = document.getElementById('results');
       c.innerHTML = '';
-      faces.forEach((f, i) => {
-        c.innerHTML += '<div class="face-card">' +
-          '<div class="face-title">Face ' + (i+1) + '</div>' +
-          row('Age', f.age) + row('Gender', f.gender) + row('Emotion', f.emotion) +
-          row('Smile', f.smile + '%') + row('Attractiveness', f.beauty) +
+      results.forEach((r, i) => {
+        const thumb = r.base64
+          ? '<img class="thumb" src="data:image/jpeg;base64,' + r.base64 + '" />'
+          : '';
+        c.innerHTML +=
+          '<div class="result-card">' +
+            thumb +
+            '<div class="result-title">Match #' + (i + 1) + '</div>' +
+            '<div class="row"><span class="lbl">Score</span><span class="val">' + r.score + ' / 100</span></div>' +
+            '<div class="score-bar" style="width:' + r.score + '%"></div>' +
+            '<div class="row"><span class="lbl">URL</span><span class="val"><a href="' + r.url + '" target="_blank">View page ↗</a></span></div>' +
           '</div>';
       });
-    }
-
-    function row(l, v) {
-      return '<div class="row"><span class="lbl">' + l + '</span><span class="val">' + (v ?? '—') + '</span></div>';
     }
 
     setInterval(checkConn, 3000);
@@ -133,23 +156,19 @@ class FaceAnalyzerApp extends AppServer {
           return res.status(500).json({ error: 'Could not read photo data' });
         }
 
-        console.log('[SCAN] Photo captured, length:', imageBase64.length);
+        console.log('[SCAN] Photo captured, searching FaceCheck.ID...');
 
-        const faces = await this.analyzeFaces(imageBase64);
-        console.log(`[SCAN] ${faces.length} face(s) detected`);
+        const results = await this.searchFace(imageBase64);
+        console.log(`[SCAN] ${results.length} match(es) found`);
 
-        // Speak summary through glasses
-        if (faces.length === 0) {
-          await this.safeSpeak(session, 'No faces detected.');
+        if (results.length === 0) {
+          await this.safeSpeak(session, 'No matching faces found on the web.');
         } else {
-          const lines = faces.map((f: any, i: number) =>
-            `Face ${i + 1}: ${f.gender}, age ${f.age}, ${f.emotion}.`
-          ).join(' ');
-          await this.safeSpeak(session, lines);
+          await this.safeSpeak(session, `Found ${results.length} match${results.length > 1 ? 'es' : ''}. Check the app for details.`);
         }
 
         isScanning = false;
-        return res.json({ faces });
+        return res.json({ results });
 
       } catch (err: any) {
         console.error('[SCAN] Error:', err.message);
@@ -169,7 +188,7 @@ class FaceAnalyzerApp extends AppServer {
     await new Promise(r => setTimeout(r, 2000));
     if (!activeSessions.has(sessionId)) return;
 
-    await this.safeSpeak(session, 'Face analyzer ready. Press scan in the app.');
+    await this.safeSpeak(session, 'Face search ready. Press scan in the app.');
 
     const cleanup = () => {
       activeSessions.delete(sessionId);
@@ -183,55 +202,69 @@ class FaceAnalyzerApp extends AppServer {
     }
   }
 
-  // ─── Face++ API ─────────────────────────────────────────────────────────────
+  // ─── FaceCheck.ID API ────────────────────────────────────────────────────────
 
-  private async analyzeFaces(imageBase64: string): Promise<any[]> {
-    const apiKey = process.env.FACEPP_API_KEY;
-    const apiSecret = process.env.FACEPP_API_SECRET;
-    if (!apiKey || !apiSecret) throw new Error('FACEPP_API_KEY / FACEPP_API_SECRET not set');
+  private async searchFace(imageBase64: string): Promise<any[]> {
+    const apiToken = process.env.FACECHECK_API_TOKEN;
+    if (!apiToken) throw new Error('FACECHECK_API_TOKEN not set');
 
-    console.log('[FACEPP] Calling Face++ API...');
+    const site = 'https://facecheck.id';
+    const headers: Record<string, string> = {
+      'accept': 'application/json',
+      'Authorization': apiToken,
+    };
 
-    const form = new FormData();
-    form.append('api_key', apiKey);
-    form.append('api_secret', apiSecret);
-    form.append('image_base64', imageBase64);
-    form.append('return_attributes', 'age,gender,emotion,beauty,smile');
+    // Step 1: Upload image
+    console.log('[FACECHECK] Uploading image...');
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
+    const formData = new FormData();
+    formData.append('images', blob, 'photo.jpg');
+    formData.append('id_search', '');
 
-    const response = await fetch('https://api-us.faceplusplus.com/facepp/v3/detect', {
+    const uploadResp = await fetch(`${site}/api/upload_pic`, {
       method: 'POST',
-      body: form
+      headers,
+      body: formData,
     });
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Face++ ${response.status}: ${err}`);
+    const uploadData = await uploadResp.json();
+    if (uploadData.error) throw new Error(`FaceCheck upload error: ${uploadData.error} (${uploadData.code})`);
+
+    const id_search = uploadData.id_search;
+    console.log('[FACECHECK] Uploaded, id_search:', id_search);
+
+    // Step 2: Poll for results (up to 60s)
+    const demo = false; // set true to test without spending credits
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise(r => setTimeout(r, 2000));
+
+      const searchResp = await fetch(`${site}/api/search`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_search,
+          with_progress: true,
+          status_only: false,
+          demo,
+        }),
+      });
+
+      const searchData = await searchResp.json();
+      if (searchData.error) throw new Error(`FaceCheck search error: ${searchData.error}`);
+
+      console.log(`[FACECHECK] Progress: ${searchData.progress ?? 0}%`);
+
+      if (searchData.output?.items) {
+        return searchData.output.items.map((item: any) => ({
+          score: item.score,
+          url: item.url,
+          base64: item.base64 ?? null,
+        }));
+      }
     }
 
-    const data = await response.json();
-    console.log('[FACEPP] Faces found:', data.faces?.length ?? 0);
-    if (!data.faces?.length) return [];
-
-    return data.faces.map((face: any) => {
-      const a = face.attributes;
-      const topEmotion = a.emotion
-        ? (Object.entries(a.emotion) as [string, number][])
-            .reduce((best, cur) => cur[1] > best[1] ? cur : best, ['neutral', 0])[0]
-            .replace('_', ' ')
-        : 'unknown';
-
-      const beauty = a.beauty
-        ? Math.round((a.beauty.female_score + a.beauty.male_score) / 2)
-        : null;
-
-      return {
-        age: a.age?.value ?? '?',
-        gender: a.gender?.value ?? '?',
-        emotion: topEmotion,
-        smile: Math.round(a.smile?.value ?? 0),
-        beauty: beauty !== null ? beauty + '/100' : '?',
-      };
-    });
+    throw new Error('FaceCheck search timed out after 60 seconds');
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -275,5 +308,5 @@ const server = new FaceAnalyzerApp({
 });
 
 server.start()
-  .then(() => console.log(`✅ Face Analyzer running on port ${port}`))
+  .then(() => console.log(`✅ Face Search running on port ${port}`))
   .catch(err => { console.error('❌ Failed to start:', err); process.exit(1); });
