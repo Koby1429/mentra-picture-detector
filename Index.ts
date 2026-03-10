@@ -271,6 +271,7 @@ const server = new FaceAnalyzerApp({
   port,
   host: '0.0.0.0',
   requiredPermissions: ['camera'],
+  webviewURL: 'https://mentra-picture-detector-production.up.railway.app/webview',
 });
 
 server.start()
