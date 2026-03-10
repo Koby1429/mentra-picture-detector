@@ -321,4 +321,4 @@ const server = new FaceAnalyzerApp({
 
 server.start()
   .then(() => console.log(`✅ Face Search running on port ${port}`))
-  .catch(err => { console.error('❌ Failed to start:', err); process.exit(1); });ב
+  .catch(err => { console.error('❌ Failed to start:', err); process.exit(1); });
